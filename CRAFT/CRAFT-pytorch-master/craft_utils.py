@@ -237,25 +237,17 @@ def getDetBoxes(textmap, linkmap, text_threshold, link_threshold, low_text, poly
 
     return boxes, polys
 
-
-# def adjustResultCoordinates(polys, ratio_w, ratio_h, ratio_net = 2):
-#     if len(polys) > 0:
-#         polys = np.array(polys)
-#         for k in range(len(polys)):
-#             if polys[k] is not None:
-#                 polys[k] *= (ratio_w * ratio_net, ratio_h * ratio_net)
-#     return polys
-
-def adjustResultCoordinates(polys, ratio_w, ratio_h):
-    for k in range(len(polys)):
-        poly = polys[k]
-        if poly is None or len(poly) == 0:  # None 값과 길이가 0인 경우를 처리
-            continue
-        for j in range(len(poly)):
-            poly[j][0] = poly[j][0] * ratio_w
-            poly[j][1] = poly[j][1] * ratio_h
+def adjustResultCoordinates(polys, ratio_w, ratio_h, ratio_net = 2):
+    if len(polys) > 0:
+        polys = np.array(polys)
+        for k in range(len(polys)):
+            if polys[k] is not None:
+                polys[k] *= (ratio_w * ratio_net, ratio_h * ratio_net)
+            else:
+                continue
+    else:
+        pass
     return polys
-
 
 
 """ 이미지 블러 처리를 위해 새로 추가 : applyBlurToPolygons() """
@@ -282,7 +274,7 @@ def blurRegionsWithLayering(img, polys):
             cv2.fillPoly(mask, [np.array(poly, dtype=np.int32)], 255)
     
     # Step 3: Blur the entire image
-    blurred_img = cv2.GaussianBlur(img, (15, 15), 0)
+    blurred_img = cv2.blur(img, (50, 50))
     
     # Step 4: Extract only the blurred regions using the mask
     blurred_regions = cv2.bitwise_and(blurred_img, blurred_img, mask=mask)
@@ -295,113 +287,3 @@ def blurRegionsWithLayering(img, polys):
     output_img = cv2.add(blurred_regions, unblurred_regions)
     
     return output_img
-
-""" 영상 블러 처리를 위한 새로 추가 """
-
-def detect_and_blur_text_in_video(video_path, net, text_threshold=0.7, link_threshold=0.4, low_text=0.4, cuda=False, poly=True, refine_net=None):
-    # 비디오 캡처 객체 생성
-    cap = cv2.VideoCapture(video_path)
-    
-    # 비디오 속성 가져오기
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # 전체 프레임 수 확인
-    
-    print(f"Total frames: {total_frames}, FPS: {fps}")
-    
-    # 결과 폴더에 저장하도록 경로 수정
-    result_folder = './result'
-    os.makedirs(result_folder, exist_ok=True)  # 폴더가 없으면 생성
-    output_video_path = os.path.join(result_folder, video_path.split('.')[0].split('/')[-1]+'.mp4')
-    
-    # 출력 비디오 라이터 생성
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
-    
-    # 프레임 처리
-    frame_count = 0
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        frame_count += 1
-        print(f"Processing frame {frame_count}/{total_frames}", end='\r')
-        
-        # 이미지 전처리
-        img_resized, target_ratio, size_heatmap = imgproc.resize_aspect_ratio(frame, 1280, interpolation=cv2.INTER_LINEAR, mag_ratio=1.5)
-        ratio_h = ratio_w = 1 / target_ratio
-        
-        # 전처리 및 텍스트 검출 과정 (기존 코드 동일)
-        x = imgproc.normalizeMeanVariance(img_resized)
-        x = torch.from_numpy(x).permute(2, 0, 1).unsqueeze(0)
-        if cuda:
-            x = x.cuda()
-        
-        # 텍스트 검출
-        with torch.no_grad():
-            y, feature = net(x)
-        
-        # 점수 맵 생성
-        score_text = y[0,:,:,0].cpu().data.numpy()
-        score_link = y[0,:,:,1].cpu().data.numpy()
-        
-        # 리파이너 사용 시
-        if refine_net is not None:
-            with torch.no_grad():
-                y_refiner = refine_net(y, feature)
-                score_link = y_refiner[0,:,:,0].cpu().data.numpy()
-        
-        # 바운딩 박스 및 폴리곤 검출
-        boxes, polys = getDetBoxes(score_text, score_link, text_threshold, link_threshold, low_text, poly)
-        
-        # 좌표 조정
-        boxes = adjustResultCoordinates(boxes, ratio_w, ratio_h)
-        polys = adjustResultCoordinates(polys, ratio_w, ratio_h)
-        
-        # 폴리곤이 None인 경우 박스로 대체
-        for k in range(len(polys)):
-            if polys[k] is None:
-                polys[k] = boxes[k]
-        
-        # 블러 처리
-        blurred_frame = blurRegionsWithMean(frame, polys)
-        
-        # 출력 비디오에 쓰기
-        out.write(blurred_frame)
-    
-    # 리소스 해제
-    cap.release()
-    out.release()
-    cv2.destroyAllWindows()
-    
-    print(f"\nBlurred video saved to {output_video_path}")
-
-def blurRegionsWithMean(img, polys):
-    """
-    평균값 블러를 사용하여 특정 영역 블러 처리
-    
-    Args:
-        img (array): 원본 이미지
-        polys (list): 블러 처리할 다각형 좌표 리스트
-    
-    Returns:
-        output_img (array): 블러 처리된 이미지
-    """
-    output_img = img.copy()
-    
-    for poly in polys:
-        if poly is not None:
-            # 다각형 마스크 생성
-            mask = np.zeros(img.shape[:2], dtype=np.uint8)
-            cv2.fillPoly(mask, [poly.astype(np.int32)], 255)
-            
-            # 평균값 블러 적용
-            blurred_region = cv2.blur(img, (15, 15))
-            
-            # 마스크를 사용해 블러 영역만 원본 이미지에 적용
-            output_img[mask == 255] = blurred_region[mask == 255]
-    
-    return output_img
-
