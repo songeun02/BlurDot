@@ -98,7 +98,7 @@ def process_multiple_images(test_image_folder, ground_truth_folder, result_folde
 
 
 parser = argparse.ArgumentParser(description='CRAFT Text Detection')
-parser.add_argument('--trained_model', default='weights/craft_ic15_20k.pth', type=str, help='pretrained model')
+parser.add_argument('--trained_model', default='/home/songeun/LogoDetection/CRAFT_B/CRAFT-pytorch-master/weights/craft_ic15_20k.pth', type=str, help='pretrained model')
 parser.add_argument('--text_threshold', default=0.7, type=float, help='text confidence threshold')
 parser.add_argument('--low_text', default=0.4, type=float, help='text low-bound score')
 parser.add_argument('--link_threshold', default=0.4, type=float, help='link confidence threshold')
@@ -107,7 +107,7 @@ parser.add_argument('--canvas_size', default=1280, type=int, help='image size fo
 parser.add_argument('--mag_ratio', default=1.5, type=float, help='image magnification ratio')
 parser.add_argument('--poly', default=False, action='store_true', help='enable polygon type')
 parser.add_argument('--show_time', default=False, action='store_true', help='show processing time')
-parser.add_argument('--test_folder', default='../../Image', type=str, help='folder path to input images')
+parser.add_argument('--test_folder', default='/mnt/e/Blur_Dot/fin_train_data_20000/', type=str, help='folder path to input images')
 parser.add_argument('--refine', default=False, action='store_true', help='enable link refiner')
 parser.add_argument('--refiner_model', default='weights/craft_refiner_CTW1500.pth', type=str, help='pretrained refiner model')
 
@@ -121,10 +121,10 @@ if len(image_list) == 0:
     print("No images found. Please check the folder path and ensure it contains valid images.")
     sys.exit(1)
 
-result_img_folder = './result_img' # 블러된 이미지 저장 
-result_folder = './result'
-result_jpg = './result_jpg/' # 탐지한 이미지 저장 
-result_txt = './result_txt/' # 탐지한 좌표 저장 
+result_img_folder = '/mnt/e/Blur_Dot_Craft_train_s/result_train_img' # 블러된 이미지 저장 
+result_folder = '/mnt/e/Blur_Dot_Craft_train_s/result_train'
+result_jpg = '/mnt/e/Blur_Dot_Craft_train_s/result_train_jpg/' # 탐지한 이미지 저장 
+result_txt = '/mnt/e/Blur_Dot_Craft_train_s/result_train_txt/' # 탐지한 좌표 저장 
 
 if not os.path.isdir(result_img_folder):
     os.mkdir(result_img_folder)
